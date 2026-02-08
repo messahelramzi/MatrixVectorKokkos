@@ -22,7 +22,8 @@ else()
   endif()
 endif()
 
-# Find or fetch CLI11 for command-line parsing
+find_package(KokkosKernels REQUIRED)
+
 find_package(CLI11 CONFIG)
 if(NOT CLI11_FOUND)
   include(FetchContent)
@@ -48,3 +49,6 @@ add_custom_command(TARGET matvec POST_BUILD
     ${CMAKE_BINARY_DIR}/x.csv
   COMMENT "Copying CSV files to build directory"
 )
+
+add_executable(matvec_kk matvec_kk.cpp)
+target_link_libraries(matvec_kk PRIVATE Kokkos::kokkos Kokkos::kokkoskernels CLI11::CLI11)
