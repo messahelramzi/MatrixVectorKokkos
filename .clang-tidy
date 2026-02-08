@@ -1,0 +1,19 @@
+Checks: >
+    clang-analyzer-*,
+    bugprone-*,
+    performance-*,
+    readability-*,
+    modernize-*,
+    misc-*,
+    -clang-analyzer-cplusplus.NewDeleteLeaks,
+    -clang-analyzer-optin.cplusplus.VirtualCall
+
+WarningsAsErrors: ''
+HeaderFilterRegex: '.*'
+AnalyzeTemporaryDtors: false
+FormatStyle: file
+CheckOptions:
+    - key:             modernize-use-nullptr.NullMacros
+        value:           'NULL'
+    - key:             readability-identifier-naming.VariableCase
+        value:           lower_case
