@@ -41,10 +41,10 @@ target_link_libraries(matvec PRIVATE Kokkos::kokkos CLI11::CLI11)
 # Copy CSV data files to build directory
 add_custom_command(TARGET matvec POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy
-    ${CMAKE_SOURCE_DIR}/A.csv
+    ${CMAKE_SOURCE_DIR}/data/A.csv
     ${CMAKE_BINARY_DIR}/A.csv
   COMMAND ${CMAKE_COMMAND} -E copy
-    ${CMAKE_SOURCE_DIR}/x.csv
+    ${CMAKE_SOURCE_DIR}/data/x.csv
     ${CMAKE_BINARY_DIR}/x.csv
   COMMENT "Copying CSV files to build directory"
 )
