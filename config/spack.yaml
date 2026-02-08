@@ -1,0 +1,23 @@
+spack:
+  definitions:
+    - compilers: [gcc@14]
+    - packages:
+        - cmake
+        - ninja
+        - gdb
+        - py-numpy
+        - kokkos@4.7.01 +cuda +openmp cuda_arch=86 cxxstd=20 +tuning +wrapper
+        - kokkos-nvcc-wrapper@4.7.01
+        - kokkos-kernels@4.7.01 +cuda +cusolver +cusparse +cublas +openmp cuda_arch=86
+        - kokkos-tools +papi
+        - intel-oneapi-mkl threads=openmp
+  concretizer:
+    unify: true
+  specs:
+    - gcc@14 +binutils
+    - cuda
+    - py-pybind11
+    - matrix:
+        - [$packages]
+        - [$%compilers]
+
