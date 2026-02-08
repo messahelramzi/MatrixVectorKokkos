@@ -5,6 +5,8 @@
 using ExecSpace = Kokkos::DefaultExecutionSpace;
 using ExecHostSpace = Kokkos::DefaultHostExecutionSpace;
 
+#define TILE_SIZE 32
+
 // Single-threaded matrix-vector multiply: y = A * x
 template <typename AViewType, typename xViewType, typename yViewType>
 void matvec_serial(const AViewType& A, const xViewType& x, yViewType& y) {
@@ -33,13 +35,6 @@ void matvec_kokkos_hierarchical(const AViewType& A, const xViewType& x,
     using exec_t = typename AViewType::device_type::execution_space;
     using team_policy = Kokkos::TeamPolicy<exec_t>;
     using member_type = typename team_policy::member_type;
-    using scratch_memory_space = typename exec_t::scratch_memory_space;
-
-    using ScratchViewType =
-        Kokkos::View<double*, scratch_memory_space,
-                     Kokkos::MemoryTraits<Kokkos::Unmanaged>>;
-
-    int scratch_size = ScratchViewType::shmem_size(M);
 
     auto policy = team_policy(N, Kokkos::AUTO);
 
@@ -62,6 +57,83 @@ void matvec_kokkos_hierarchical(const AViewType& A, const xViewType& x,
             // Store result (only one thread per team does this)
             if (team.team_rank() == 0) {
                 y(i) = row_sum;
+            }
+        });
+}
+
+// In dense matvec:
+// Each row reuses the same x
+//      On GPUs: x comes from global memory every time
+//      On CPUs: helps cache locality for large x
+// Idea: Load a tile of x into fast
+//      scratch(shared memory / L1) and
+//      reuse it across the team
+template <typename AViewType, typename xViewType, typename yViewType>
+void matvec_kokkos_shared(const AViewType& A, const xViewType& x,
+                          yViewType& y) {
+    const int M = A.extent(0);  // rows
+    const int N = A.extent(1);  // cols
+
+    // Use TeamPolicy with teams working on rows
+    // team_size controls how many threads per team
+    using exec_t = typename AViewType::device_type::execution_space;
+    using team_policy = Kokkos::TeamPolicy<exec_t>;
+    using member_type = typename team_policy::member_type;
+    using scratch_memory_space = typename exec_t::scratch_memory_space;
+
+    using ScratchViewType =
+        Kokkos::View<double*, scratch_memory_space,
+                     Kokkos::MemoryTraits<Kokkos::Unmanaged>>;
+
+    auto policy = team_policy(M, Kokkos::AUTO);
+
+    const int scratch_size = ScratchViewType::shmem_size(
+        TILE_SIZE);  // Adjust tile size based on hardware
+
+    // Scratch size: one tile of x per team
+    policy =
+        policy.set_scratch_size(0, Kokkos::PerTeam(sizeof(double) * TILE_SIZE));
+
+    Kokkos::parallel_for(
+        "MatVecTiled", policy, KOKKOS_LAMBDA(const member_type& team) {
+            const int i = team.league_rank();
+            if (i >= M) return;  // Guard against out-of-bounds league size
+
+            // Scratch view for x tile
+            ScratchViewType x_tile(team.team_scratch(0), TILE_SIZE);
+
+            double sum = 0.0;
+
+            // Loop over tiles of x
+            for (int jj = 0; jj < N; jj += TILE_SIZE) {
+                const int tile_len =
+                    (jj + TILE_SIZE <= N) ? TILE_SIZE : (N - jj);
+                // it is better than if tests inside the
+                // parallel_for loop to avoid divergent
+                // execution on GPU
+
+                // Load x tile into scratch
+                Kokkos::parallel_for(
+                    Kokkos::TeamThreadRange(team, tile_len),
+                    [&](const int t) { x_tile(t) = x(jj + t); });
+
+                team.team_barrier();
+
+                // Compute partial dot product for this tile
+                double tile_sum = 0.0;
+                Kokkos::parallel_reduce(
+                    Kokkos::TeamThreadRange(team, tile_len),
+                    [&](const int t, double& local) {
+                        local += A(i, jj + t) * x_tile(t);
+                    },
+                    tile_sum);
+
+                sum += tile_sum;
+            }
+
+            // Write result
+            if (team.team_rank() == 0) {
+                y(i) = sum;
             }
         });
 }

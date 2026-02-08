@@ -131,7 +131,7 @@ int main(int argc, char* argv[]) {
 
         // Print results (problem size, time and bandwidth in GB/s).
         printf(
-            "M( %d ) N( %d ) nrepeat ( %d ) problem( %g MB ) time( "
+            "M( %d ) N( %d ) nrepeat ( %d ) problem size ( %g MB ) time( "
             "%g s ) bandwidth( %g GB/s )\n",
             M, N, nrepeat, Gbytes * 1000, elapsed, Gbytes * nrepeat / elapsed);
         std::cout << "Relative error: " << std::scientific
