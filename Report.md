@@ -14,7 +14,7 @@ Kokkos provides abstractions that allow us to write computation kernels once and
 ### 2. **Productivity & Maintainability**
 Kokkos abstracts low-level details like thread management, memory allocation, and synchronization, allowing developers to focus on algorithmic improvements. The framework handles:
 - **Compilation**: Kokkos_launches the appropriate backend compiler (e.g., NVCC for CUDA) with optimal flags. The user does not need to manage separate build configurations for CPU and GPU. He can simply add the desired host compiler and device compiler flags, the nvcc_wrapper dispatches the compilation flags to the appropriate compiler based on the execution space selected at runtime. Another advantage is compiling and preparing the GPU code on host only CPU configuration in order to have a faster development cycle without avoiding long GPU compilation times.
-- **Memory management**: Automatic allocation strategies per execution space (UVM for CUDA, page-locked memory for H2D transfers)
+- **Memory management**: Automatic allocation strategies per execution space (UVM for CUDA, page-locked memory for H2D transfers). In terms of memory management, one has to think also about handling object lifecycles. Kokkos::View is a lightweight wrapper around raw pointers that manages memory allocation and deallocation automatically with reference counting. Comparing the three implementations, the one with Kokkos Kernels is more maintainable as it abstracts the memory management and provides a higher-level interface for linear algebra operations, while the basic Kokkos implementation requires manual management of memory and kernel launches, and the cuBLAS implementation requires explicit handling of CUDA memory management and API calls. 
 - **Scheduling**: Kokkos intelligently maps computations to hardware without manual tuning
 - **Interoperability**: Easy integration with external libraries like Kokkos Kernels for optimized linear algebra operations
 
@@ -86,6 +86,10 @@ hat happens in one warp:
 - GPU issues one coalesced load
 - Each lane computes partial sum for its segment of the row and stores the results in global memory.
 
+The results are to be compared to cublas and Kokkos Kernels implementations for validation and performance comparison. Below is a screenshot of the console log showing the execution times and bandwith for cuBLAS that provided similar results to both Kokkos kernels implementation (internal and wrapping cuBLAS). We can observe that the warp-level approach was 5x times faster. 
+
+<img src="./images/consol_cublas.png" alt="Console log" width="800" height="400">
+
   **Shared Memory Tiling** (bonus): Block threads into tiles (e.g., 32×32) that collectively load a submatrix into shared memory, reducing global memory traffic by a factor of blockDim.x
   **Launch Configuration**: Kokkos automatically selects thread blocks and grid dimensions. Typical configs: 256–512 threads per block, multiple blocks per SM
   **CUDA Events Timing**: Kokkos provides profiling tools to measure kernel execution time accurately, excluding data transfer overhead. Kokkos::profiling::push_region and pop_region can be used to mark code regions for profiling and Kokkos Tools with PAPI can be used to measure GPU performance counters hooking nvidia profiling librairies on runtime and calling CudaEvents.
@@ -95,7 +99,6 @@ For CPU profiling compile with appropriate flags (cmake config RelWithDebInfo fo
 export KOKKOS_TOOLS_LIBS=${INSTALL_Path_to_KTOOLS}/libkp_nvtx_connector.so
 nsys profile -t nvtx,cuda ./matvec
 ```
-
 <img src="./images/console_log.png" alt="Console log" width="800" height="300">
 
 <img src="./images/nsys-ui.png" alt="Console log" width="800" height="400">
@@ -149,6 +152,7 @@ As exepcted from GEMV, we are better that Blas 1 dot_product in terms of rooflin
 | OpenMP (8 threads)                      | 2048        | 0.073    | 46               | 6.62×   |
 | OpenMP (8 threads) Kokkos_kernels Blas2 | 2048        | 0.075    | 44               | 6.42×   |
 | GPU (RTX 3080) Kokkos_kernels Blas2     | 2048        | 0.05     | 68               | 9.62×   |
+| GPU (RTX 3080) cuBlas2_v2               | 2048        | 0.043    | 78               | 9.62×   |
 | GPU (RTX 3080)                          | 2048        | 0.01     | 312              | 48×     |
 
 **Interpretation**: Matrix-vector multiply is memory-bound ($I = 0.25$ ops/byte). GPU achieves higher bandwidth due to higher memory throughput, not higher compute utilization.

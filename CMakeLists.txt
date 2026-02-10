@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.31)
 
-project(MATVEC)
+project(MATVEC LANGUAGES CXX CUDA)
 
 set(EXPORT_COMPILE_COMMANDS ON)
 
@@ -35,11 +35,16 @@ if(NOT CLI11_FOUND)
   FetchContent_MakeAvailable(CLI11)
 endif()
 
+find_package(CUDAToolkit REQUIRED)
+
 # Build Matvec executable
 add_executable(matvec matvec.cpp)
 target_link_libraries(matvec PRIVATE Kokkos::kokkos CLI11::CLI11)
 
-# Copy CSV data files to build directory
+# Build matvec_cublas executable (CUDA/cuBLAS)
+add_executable(matvec_cublas matvec_cublas.cu)
+target_link_libraries(matvec_cublas PRIVATE CUDA::cublas)
+
 add_custom_command(TARGET matvec POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy
     ${CMAKE_SOURCE_DIR}/data/A.csv
@@ -49,10 +54,6 @@ add_custom_command(TARGET matvec POST_BUILD
     ${CMAKE_BINARY_DIR}/x.csv
   COMMENT "Copying CSV files to build directory"
 )
-
-# Build Matvec_stream executable
-#add_executable(matvec_stream matvec_stream.cpp)
-#target_link_libraries(matvec_stream PRIVATE Kokkos::kokkos CLI11::CLI11)
 
 # Build Matvec_kk executable
 if(KokkosKernels_FOUND)
