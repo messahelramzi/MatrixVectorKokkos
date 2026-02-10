@@ -108,6 +108,15 @@ Another profiling tool that I recommend is HPCToolkit, which is a powerful perfo
   
 - **Roofline Model**: Compare against GPU peak FLOPs and memory bandwidth to classify as memory-bound or compute-bound
 
+To generate a roofline plot using NVIDIA Nsight Compute, you can use the following command to profile the GPU execution and collect the necessary performance metrics:
+```bash
+ncu -o profile_matvec --set full ./matvec --exec_space device --view_layout LayoutRight
+ncu-ui profile_matvec.ncu-rep
+```
+
+It can be observed from the generated roofline plot that the matrix-vector multiplication kernel is memory-bound, as its arithmetic intensity is low (0.25 ops/byte) and it achieves a bandwidth close to the GPU's peak memory bandwidth, but far from the peak compute performance. This indicates that optimizing memory access patterns and reducing global memory traffic (e.g., through tiling or shared memory) would be more beneficial than focusing on computational optimizations for this specific kernel.
+
+<img src="./images/roofline.png" alt="Console log" width="800" height="300">
 
 
 **Why Kokkos helps:** Compiler targets CUDA automatically with correct synchronization and memory barriers; developers avoid low-level CUDA API calls.
@@ -140,8 +149,11 @@ Another profiling tool that I recommend is HPCToolkit, which is a powerful perfo
 
 **Techniques:**
 1. **Cache Blocking / Shared-Memory Tiling**: Process submatrices in GPU shared memory to reduce global memory traffic
+   An example of tiling strategy is to divide the matrix into smaller tiles (e.g., 32×32) that fit into shared memory is provided in "matvec.hpp". Each thread block would load a tile of the matrix A and the corresponding segment of vector x into shared memory, perform the multiplication for that tile, and then write the results back to global memory. This approach can significantly reduce global memory accesses and improve performance, especially for larger matrices that do not fit entirely in cache.
 2. **Pinned Host Memory**: Use `cudaMallocHost()` for faster H2D/D2H transfers
+   This part was not implemented in the current codebase, but it can be achieved in Kokkos by using `Kokkos::View` with `Kokkos::MemoryTraits<Kokkos::HostPinned>` to allocate pinned memory for the host-side vectors and matrices. This allows for faster data transfers between the host and device, which can be particularly beneficial for large matrices where transfer time can become a bottleneck.
 3. **Stream Overlap**: Use CUDA streams to overlap compute and data transfer: while GPU computes on batch $i$, transfer batch $i+1$
+   This part was also not implemented in the current codebase, but it can be achieved in Kokkos by creating multiple execution spaces (streams) and using them to manage concurrent data transfers and kernel executions. This approach allows for overlapping computation and data movement, improving overall performance or to limit the total amount of data that needs to be transferred and held in GPU memory if it exceeds the GPU memory limits. However, it requires careful management of dependencies between streams to ensure correctness. I have used this technique in [Muscat FE code developed at Safran](https://gitlab.com/drti/muscat/-/blob/master/cpp_src/FE/Kokkos/NativeIntegrationKokkos.hpp?ref_type=heads#L473) ([paper](https://hal-hceres.archives-ouvertes.fr/CSMA2024/hal-04823002v1))
 
 **Implementation in Kokkos:**
 - Kokkos supports views with custom memory spaces (`Kokkos::SharedSpace` for shared memory)
@@ -338,3 +350,15 @@ spack env status
 - The project uses FetchContent for CLI11 if not found via Kokkos-provided packages
 - Kokkos kernel-specific features require KokkosKernels to be found during CMake configuration
 - GPU execution requires CUDA-capable hardware matching the configured architecture (to be adjusted in `spack.yaml` if needed)
+
+## References
+
+- Kokkos Documentation: https://kokkos.github.io/
+- Spack Documentation: https://spack.io/
+- NVIDIA Nsight Systems: https://developer.nvidia.com/nsight-systems
+- Intel VTune: https://www.intel.com/content/www/us/en/developer/tools/vtune-profiler/overview.html
+- Python NumPy: https://numpy.org/doc/stable
+- CLI11: https://cliutils.github.io/CLI11/
+- HPCToolkit: https://hpctoolkit.org/
+- Muscat FE code developed at Safran: https://gitlab.com/drti/muscat
+- High Performance software Linux foundation: https://www.hpsf.org/
