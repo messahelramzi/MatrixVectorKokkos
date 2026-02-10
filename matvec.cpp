@@ -10,6 +10,7 @@ int main(int argc, char* argv[]) {
     std::string vector_file = "x.csv";
     int nrepeat = 1;
     std::string view_layout = "none";
+    std::string view_layout_in = "none";
 
     app.add_option("--exec_space", execution_space,
                    "Execution space (device|host)")
@@ -20,7 +21,7 @@ int main(int argc, char* argv[]) {
         ->default_val("x.csv");
     app.add_option("--nrepeat", nrepeat, "Number of repetitions")
         ->default_val("100");
-    app.add_option("--view_layout", view_layout, "Default view layout")
+    app.add_option("--view_layout", view_layout_in, "Default view layout")
         ->default_val("none");
 
     CLI11_PARSE(app, argc, argv);
@@ -37,6 +38,17 @@ int main(int argc, char* argv[]) {
             view_layout = "LayoutRight";
         else
             std::cout << "Default layout: other\n";
+
+        if (view_layout_in != "none") {
+            if (view_layout_in == "LayoutLeft" ||
+                view_layout_in == "LayoutRight") {
+                view_layout = view_layout_in;
+            } else {
+                std::cerr << "Invalid view layout specified: " << view_layout_in
+                          << ". Using default layout: " << view_layout
+                          << std::endl;
+            }
+        }
 
         std::cout << "=====================================" << std::endl;
         std::cout << "Execution space: " << execution_space << std::endl;
@@ -60,10 +72,14 @@ int main(int argc, char* argv[]) {
                                        "y_sol"),
                     y_ref.extent(0));
                 Kokkos::Timer timer;
+                // This region will be visible in Kokkos profiling tools
+                // like nvprof or VTune
+                Kokkos::Profiling::pushRegion("MatVecHierarchical");
                 for (int i = 0; i < nrepeat; ++i) {
                     matvec_kokkos_hierarchical(A, x, y_sol);
-                    Kokkos::fence();
                 }
+                Kokkos::fence();
+                Kokkos::Profiling::popRegion();
                 elapsed = timer.seconds();
                 rel = compute_relative_error(y_sol, y_ref);
                 M = A.extent(0);
@@ -77,10 +93,14 @@ int main(int argc, char* argv[]) {
                                        "y_sol"),
                     y_ref.extent(0));
                 Kokkos::Timer timer;
+                // This region will be visible in Kokkos profiling tools
+                // like nvprof or VTune
+                Kokkos::Profiling::pushRegion("MatVecHierarchical");
                 for (int i = 0; i < nrepeat; ++i) {
                     matvec_kokkos_hierarchical(A, x, y_sol);
-                    Kokkos::fence();
                 }
+                Kokkos::fence();
+                Kokkos::Profiling::popRegion();
                 elapsed = timer.seconds();
                 rel = compute_relative_error(y_sol, y_ref);
                 M = A.extent(0);
@@ -96,10 +116,14 @@ int main(int argc, char* argv[]) {
                                        Kokkos::WithoutInitializing, "y_sol"),
                     y_ref.extent(0));
                 Kokkos::Timer timer;
+                // This region will be visible in Kokkos profiling tools
+                // like nvprof or VTune
+                Kokkos::Profiling::pushRegion("MatVecHierarchical");
                 for (int i = 0; i < nrepeat; ++i) {
                     matvec_kokkos_hierarchical(A, x, y_sol);
-                    Kokkos::fence();
                 }
+                Kokkos::fence();
+                Kokkos::Profiling::popRegion();
                 elapsed = timer.seconds();
                 rel = compute_relative_error(y_sol, y_ref);
                 M = A.extent(0);
@@ -113,10 +137,14 @@ int main(int argc, char* argv[]) {
                                        Kokkos::WithoutInitializing, "y_sol"),
                     y_ref.extent(0));
                 Kokkos::Timer timer;
+                // This region will be visible in Kokkos profiling tools
+                // like nvprof or VTune
+                Kokkos::Profiling::pushRegion("MatVecHierarchical");
                 for (int i = 0; i < nrepeat; ++i) {
                     matvec_kokkos_hierarchical(A, x, y_sol);
-                    Kokkos::fence();
                 }
+                Kokkos::fence();
+                Kokkos::Profiling::popRegion();
                 elapsed = timer.seconds();
                 rel = compute_relative_error(y_sol, y_ref);
                 M = A.extent(0);

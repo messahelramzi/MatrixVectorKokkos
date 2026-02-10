@@ -10,7 +10,9 @@ spack:
         - kokkos-nvcc-wrapper@4.7.01
         - kokkos-kernels@4.7.01 +cuda ~cusolver ~cusparse ~cublas +openmp cuda_arch=86
         - kokkos-tools +papi
-        - intel-oneapi-mkl threads=openmp
+        - cli11
+        - intel-oneapi-vtune
+        - intel-oneapi-advisor
   concretizer:
     unify: true
   specs:

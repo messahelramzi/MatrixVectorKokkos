@@ -7,22 +7,22 @@ set(EXPORT_COMPILE_COMMANDS ON)
 # Find packages requirements
 find_package(Kokkos CONFIG)
 if(Kokkos_FOUND)
-   message(STATUS "Found Kokkos: ${Kokkos_DIR} (version \"${Kokkos_VERSION}\")")
+    message(STATUS "Found Kokkos: ${Kokkos_DIR} (version \"${Kokkos_VERSION}\")")
 else()
-   if(EXISTS ${Kokkos_COMMON_SOURCE_DIR})
-    add_subdirectory(${Kokkos_COMMON_SOURCE_DIR} Kokkos)
-   else()
-    include(FetchContent)
-    FetchContent_Declare(
-      Kokkos
-      GIT_REPOSITORY https://github.com/kokkos/kokkos.git
-      GIT_TAG        4.7.01
-    )
+    if(EXISTS ${Kokkos_COMMON_SOURCE_DIR})
+      add_subdirectory(${Kokkos_COMMON_SOURCE_DIR} Kokkos)
+    else()
+      include(FetchContent)
+      FetchContent_Declare(
+        Kokkos
+        GIT_REPOSITORY https://github.com/kokkos/kokkos.git
+        GIT_TAG        4.7.01
+      )
     FetchContent_MakeAvailable(Kokkos)
   endif()
 endif()
 
-find_package(KokkosKernels REQUIRED)
+find_package(KokkosKernels CONFIG)
 
 find_package(CLI11 CONFIG)
 if(NOT CLI11_FOUND)
@@ -35,7 +35,7 @@ if(NOT CLI11_FOUND)
   FetchContent_MakeAvailable(CLI11)
 endif()
 
-# add executable main
+# Build Matvec executable
 add_executable(matvec matvec.cpp)
 target_link_libraries(matvec PRIVATE Kokkos::kokkos CLI11::CLI11)
 
@@ -50,5 +50,15 @@ add_custom_command(TARGET matvec POST_BUILD
   COMMENT "Copying CSV files to build directory"
 )
 
-add_executable(matvec_kk matvec_kk.cpp)
-target_link_libraries(matvec_kk PRIVATE Kokkos::kokkos Kokkos::kokkoskernels CLI11::CLI11)
+# Build Matvec_stream executable
+#add_executable(matvec_stream matvec_stream.cpp)
+#target_link_libraries(matvec_stream PRIVATE Kokkos::kokkos CLI11::CLI11)
+
+# Build Matvec_kk executable
+if(KokkosKernels_FOUND)
+  message(STATUS "Found KokkosKernels: ${KokkosKernels_DIR} (version \"${KokkosKernels_VERSION}\")")
+  add_executable(matvec_kk matvec_kk.cpp)
+  target_link_libraries(matvec_kk PRIVATE Kokkos::kokkos Kokkos::kokkoskernels CLI11::CLI11)
+else()
+  message(FATAL_ERROR "Could not find KokkosKernels matvec_kk executable will not be built.")
+endif()

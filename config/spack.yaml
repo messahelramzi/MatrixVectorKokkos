@@ -8,9 +8,11 @@ spack:
         - py-numpy
         - kokkos@4.7.01 +cuda +openmp cuda_arch=86 cxxstd=20 +tuning +wrapper
         - kokkos-nvcc-wrapper@4.7.01
-        - kokkos-kernels@4.7.01 +cuda +cusolver +cusparse +cublas +openmp cuda_arch=86
+        - kokkos-kernels@4.7.01 +cuda ~cusolver ~cusparse ~cublas +openmp cuda_arch=86
         - kokkos-tools +papi
-        - intel-oneapi-mkl threads=openmp
+        - cli11
+        - intel-oneapi-vtune@2023
+        - intel-oneapi-advisor@2023
   concretizer:
     unify: true
   specs:

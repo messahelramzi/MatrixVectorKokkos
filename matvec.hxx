@@ -27,10 +27,6 @@ void matvec_serial(const AViewType& A, const xViewType& x, yViewType& y) {
 template <typename AViewType, typename xViewType, typename yViewType>
 void matvec_kokkos_hierarchical(const AViewType& A, const xViewType& x,
                                 yViewType& y) {
-    // This region will be visible in Kokkos profiling tools
-    // like nvprof or VTune
-    Kokkos::Profiling::pushRegion("MatVecHierarchical");
-
     const int N = A.extent(0);  // rows
     const int M = A.extent(1);  // cols
 
@@ -63,8 +59,6 @@ void matvec_kokkos_hierarchical(const AViewType& A, const xViewType& x,
                 y(i) = row_sum;
             }
         });
-    Kokkos::fence();
-    Kokkos::Profiling::popRegion();
 }
 
 // In dense matvec:
@@ -77,10 +71,6 @@ void matvec_kokkos_hierarchical(const AViewType& A, const xViewType& x,
 template <typename AViewType, typename xViewType, typename yViewType>
 void matvec_kokkos_shared(const AViewType& A, const xViewType& x,
                           yViewType& y) {
-    // This region will be visible in Kokkos profiling tools
-    // like nvprof or VTune
-    Kokkos::Profiling::pushRegion("MatVecShared");
-
     const int M = A.extent(0);  // rows
     const int N = A.extent(1);  // cols
 
@@ -146,8 +136,6 @@ void matvec_kokkos_shared(const AViewType& A, const xViewType& x,
                 y(i) = sum;
             }
         });
-    Kokkos::fence();
-    Kokkos::Profiling::popRegion();
 }
 
 // Compute relative error ||y - y_ref|| / ||y_ref|| using Kokkos parallel_reduce
