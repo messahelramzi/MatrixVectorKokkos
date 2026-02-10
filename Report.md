@@ -72,12 +72,23 @@ Same source code, using Kokkos with OpenMP backend on runtime selection with arg
 Same source code, using Kokkos with CUDA backend enabled on runtime selection with argument option "--exec_space device" and appropriate layout for col-major access 'Kokkos::LayoutLeft' (fortran-style layout) with runtime argument "--view_layout right".
 
 **GPU Optimization Strategies:**
-- **Memory Coalescing**: Kokkos ensures col-major layout so that consecutive threads access consecutive memory locations, maximizing coalescing efficiency
-  <img src="./images/layout_cpu.png" alt="Console log" width="800" height="400">
+  **Memory Coalescing**: Kokkos provides a handling of layouts so that consecutive threads access consecutive memory locations, maximizing coalescing efficiency
+ 
+<img src="./images/layout_cuda.png" alt="Console log" width="800" height="400">
 
-- **Shared Memory Tiling** (bonus): Block threads into tiles (e.g., 32×32) that collectively load a submatrix into shared memory, reducing global memory traffic by a factor of blockDim.x
-- **Launch Configuration**: Kokkos automatically selects thread blocks and grid dimensions. Typical configs: 256–512 threads per block, multiple blocks per SM
-- **CUDA Events Timing**: Kokkos provides profiling tools to measure kernel execution time accurately, excluding data transfer overhead. Kokkos::profiling::push_region and pop_region can be used to mark code regions for profiling and Kokkos Tools with PAPI can be used to measure GPU performance counters hooking nvidia profiling librairies on runtime and calling CudaEvents.
+An excellent talk and work aligned with Kokkos::Views and mdspan layouts is provided by [Cedric Chevalier, CEA, HPSF Con 2025](https://youtu.be/_HYwIHten10?si=hM55aVu20xEK5J_t) at HPSF 2025, where he explains how to use Kokkos::Views and mdspan with different layouts to optimize memory access patterns for both CPU and GPU architectures.
+
+In this implementation, we use a Warp-level reduction layout. Instead of one thread per row, we consider one warp per row where each lane computes partial dot product for a segment of the row and then performs a warp shuffle reduction to combine results. This approach can improve performance for larger matrices by increasing instruction-level parallelism and better utilizing GPU resources.
+
+hat happens in one warp:
+- Lane k loads A[row][k]
+- Addresses are contiguous
+- GPU issues one coalesced load
+- Each lane computes partial sum for its segment of the row and stores the results in global memory.
+
+  **Shared Memory Tiling** (bonus): Block threads into tiles (e.g., 32×32) that collectively load a submatrix into shared memory, reducing global memory traffic by a factor of blockDim.x
+  **Launch Configuration**: Kokkos automatically selects thread blocks and grid dimensions. Typical configs: 256–512 threads per block, multiple blocks per SM
+  **CUDA Events Timing**: Kokkos provides profiling tools to measure kernel execution time accurately, excluding data transfer overhead. Kokkos::profiling::push_region and pop_region can be used to mark code regions for profiling and Kokkos Tools with PAPI can be used to measure GPU performance counters hooking nvidia profiling librairies on runtime and calling CudaEvents.
 
 For CPU profiling compile with appropriate flags (cmake config RelWithDebInfo for example), Intel VTune and Advisor can be used to analyze CPU performance, while NVIDIA Nsight Systems can be used for GPU profiling. For example, to profile the GPU execution with Nsight Systems, you can use the following command:
 ```bash
@@ -118,18 +129,16 @@ It can be observed from the generated roofline plot that the matrix-vector multi
 
 <img src="./images/roofline.png" alt="Console log" width="800" height="300">
 
-
-**Why Kokkos helps:** Compiler targets CUDA automatically with correct synchronization and memory barriers; developers avoid low-level CUDA API calls.
+As exepcted from GEMV, we are better that Blas 1 dot_product in terms of roofline performance but we are at communication/compute bound limit for this kernel. As expected in comparison to GEMM, there is no data reuse in GEMV and we are at the limit of the roofline performance for this kernel, while for GEMM we can have a much higher arithmetic intensity and better performance by reusing data in shared memory and registers. For more details, there is an excellent talk by [Jack Dongarra, ATPESC 2019](https://youtu.be/TPP5LavGEiI?si=lTdvzCRisKT0lQRR) that I recommend to my undergraduate student.
 
 ### Task 4: Performance Analysis
 **Objective:** Measure and analyze bandwidth utilization and algorithmic efficiency.
 
 **Metrics:**
 - **Execution Time**: Average over multiple runs with warm-up iterations
-- **Bandwidth**: $BW_{GB/s} = \frac{2mn \text{ (doubles)} \times 8}{time} / 10^9$
-- **Arithmetic Intensity**: $I = \frac{\text{FLOPs}}{memory \text{ (bytes)}} = \frac{2n}{16}$ ops/byte for $2mn$ FLOPs and $m \times (n + 1) \times 8$ bytes accessed
-- **Roofline Angle**: If $I <$ (peak memory BW / peak compute), kernel is memory-bound; otherwise compute-bound
-
+- **Bandwidth**: $BW_{GB/s} = \frac{(M + M * N) \times \text{ sizeof(doubles)}}{time} / 10^9$
+- **Speedup**: $S = \frac{T_{serial}}{T_{parallel}}$
+  
 **Expected Results (example):**
 
 | Version                                 | Matrix Size | Time (s) | Bandwidth (GB/s) | Speedup |
@@ -149,7 +158,7 @@ It can be observed from the generated roofline plot that the matrix-vector multi
 
 **Techniques:**
 1. **Cache Blocking / Shared-Memory Tiling**: Process submatrices in GPU shared memory to reduce global memory traffic
-   An example of tiling strategy is to divide the matrix into smaller tiles (e.g., 32×32) that fit into shared memory is provided in "matvec.hpp". Each thread block would load a tile of the matrix A and the corresponding segment of vector x into shared memory, perform the multiplication for that tile, and then write the results back to global memory. This approach can significantly reduce global memory accesses and improve performance, especially for larger matrices that do not fit entirely in cache.
+   An example of tiling strategy is to divide the matrix into smaller tiles (e.g., 32×32) that fit into shared memory is provided in "matvec.hpp". Each thread block would load a tile of the matrix A and the corresponding segment of vector x into shared memory, perform the multiplication for that tile, and then write the results back to global memory. This approach can significantly reduce global memory accesses and improve performance, especially for larger matrices that do not fit entirely in cache. However, that warp reduction approach demonstrated to be more efficient for the matrix sizes tested in this project, but tiling can be beneficial for larger matrices or different hardware architectures of GEMM operations.
 2. **Pinned Host Memory**: Use `cudaMallocHost()` for faster H2D/D2H transfers
    This part was not implemented in the current codebase, but it can be achieved in Kokkos by using `Kokkos::View` with `Kokkos::MemoryTraits<Kokkos::HostPinned>` to allocate pinned memory for the host-side vectors and matrices. This allows for faster data transfers between the host and device, which can be particularly beneficial for large matrices where transfer time can become a bottleneck.
 3. **Stream Overlap**: Use CUDA streams to overlap compute and data transfer: while GPU computes on batch $i$, transfer batch $i+1$
